@@ -91,6 +91,8 @@ import org.thialfihar.android.apg.ui.widget.SectionView;
 import org.thialfihar.android.apg.ui.widget.UserIdEditor;
 import org.thialfihar.android.apg.utils.IterableIterator;
 import org.thialfihar.android.apg.utils.PrngFixes;
+import org.thialfihar.android.apg.key.KeyRing;
+import org.thialfihar.android.apg.key.Key;
 
 import android.app.Activity;
 import android.content.Context;
@@ -245,15 +247,15 @@ public class Apg {
     public static String getCachedPassPhrase(long keyId) {
         long realId = keyId;
         if (realId != Id.key.symmetric) {
-            PGPSecretKeyRing keyRing = getSecretKeyRing(keyId);
+            KeyRing keyRing = getSecretKeyRing(keyId);
             if (keyRing == null) {
                 return null;
             }
-            PGPSecretKey masterKey = getMasterKey(keyRing);
+            Key masterKey = keyRing.getMasterKey();
             if (masterKey == null) {
                 return null;
             }
-            realId = masterKey.getKeyID();
+            realId = masterKey.getKeyId();
         }
         CachedPassPhrase cpp = mPassPhraseCache.get(realId);
         if (cpp == null) {
@@ -518,7 +520,7 @@ public class Apg {
         // TODO: this doesn't work quite right yet
         if (keyEditor.getExpiryDate() != null) {
             GregorianCalendar creationDate = new GregorianCalendar();
-            creationDate.setTime(getCreationDate(masterKey));
+            creationDate.setTime(masterKey.getCreationDate());
             GregorianCalendar expiryDate = keyEditor.getExpiryDate();
             long numDays = getNumDaysBetween(creationDate, expiryDate);
             if (numDays <= 0) {
@@ -570,7 +572,7 @@ public class Apg {
             // TODO: this doesn't work quite right yet
             if (keyEditor.getExpiryDate() != null) {
                 GregorianCalendar creationDate = new GregorianCalendar();
-                creationDate.setTime(getCreationDate(masterKey));
+                creationDate.setTime(masterKey.getCreationDate());
                 GregorianCalendar expiryDate = keyEditor.getExpiryDate();
                 long numDays = getNumDaysBetween(creationDate, expiryDate);
                 if (numDays <= 0) {
@@ -828,13 +830,14 @@ public class Apg {
         return mDatabase.getKeyRing(keyRingId);
     }
 
-    public static PGPSecretKeyRing getSecretKeyRing(long keyId) {
+    public static KeyRing getSecretKeyRing(long keyId) {
+        // TODO: this belongs in Database somewhere
         byte[] data = mDatabase.getKeyRingDataFromKeyId(Id.database.type_secret, keyId);
         if (data == null) {
             return null;
         }
         try {
-            return new PGPSecretKeyRing(data);
+            return new KeyRing(new PGPSecretKeyRing(data));
         } catch (IOException e) {
             // no good way to handle this, return null
             // TODO: some info?
@@ -845,13 +848,13 @@ public class Apg {
         return null;
     }
 
-    public static PGPPublicKeyRing getPublicKeyRing(long keyId) {
+    public static KeyRing getPublicKeyRing(long keyId) {
         byte[] data = mDatabase.getKeyRingDataFromKeyId(Id.database.type_public, keyId);
         if (data == null) {
             return null;
         }
         try {
-            return new PGPPublicKeyRing(data);
+            return new Key(new PGPPublicKeyRing(data));
         } catch (IOException e) {
             // no good way to handle this, return null
             // TODO: some info?
@@ -1007,18 +1010,18 @@ public class Apg {
             progress.setProgress(R.string.progress_preparingSignature, 10, 100);
             if (forceV3Signature) {
                 signatureV3Generator =
-                    new PGPV3SignatureGenerator(signingKey.getPublicKey().getAlgorithm(),
+                    new PGPV3SignatureGenerator(signingKey.getAlgorithm(),
                                                 hashAlgorithm,
                                                 new BouncyCastleProvider());
                 signatureV3Generator.initSign(PGPSignature.BINARY_DOCUMENT, signaturePrivateKey);
             } else {
                 signatureGenerator =
-                        new PGPSignatureGenerator(signingKey.getPublicKey().getAlgorithm(),
+                        new PGPSignatureGenerator(signingKey.getAlgorithm(),
                                                   hashAlgorithm,
                                                   new BouncyCastleProvider());
                 signatureGenerator.initSign(PGPSignature.BINARY_DOCUMENT, signaturePrivateKey);
 
-                String userId = getMainUserId(getMasterKey(signingKeyRing));
+                String userId = signingKeyRing.getMasterKey().getMainUserId();
                 PGPSignatureSubpacketGenerator spGen = new PGPSignatureSubpacketGenerator();
                 spGen.setSignerUserID(false, userId);
                 signatureGenerator.setHashedSubpackets(spGen.generate());
@@ -1099,8 +1102,8 @@ public class Apg {
         ArmoredOutputStream armorOut = new ArmoredOutputStream(outStream);
         armorOut.setHeader("Version", getFullVersion(context));
 
-        PGPSecretKey signingKey = null;
-        PGPSecretKeyRing signingKeyRing = null;
+        Key signingKey = null;
+        KeyRing signingKeyRing = null;
         PGPPrivateKey signaturePrivateKey = null;
 
         if (signatureKeyId == 0) {
@@ -1131,19 +1134,19 @@ public class Apg {
 
         if (forceV3Signature) {
             signatureV3Generator =
-                new PGPV3SignatureGenerator(signingKey.getPublicKey().getAlgorithm(),
+                new PGPV3SignatureGenerator(signingKey.getAlgorithm(),
                                             hashAlgorithm,
                                             new BouncyCastleProvider());
             signatureV3Generator.initSign(PGPSignature.CANONICAL_TEXT_DOCUMENT, signaturePrivateKey);
         } else {
             signatureGenerator =
-                    new PGPSignatureGenerator(signingKey.getPublicKey().getAlgorithm(),
+                    new PGPSignatureGenerator(signingKey.getAlgorithm(),
                                               hashAlgorithm,
                                               new BouncyCastleProvider());
             signatureGenerator.initSign(PGPSignature.CANONICAL_TEXT_DOCUMENT, signaturePrivateKey);
 
             PGPSignatureSubpacketGenerator spGen = new PGPSignatureSubpacketGenerator();
-            String userId = getMainUserId(getMasterKey(signingKeyRing));
+            String userId = signingKeyRing.getMasterKey().getMainUserId();
             spGen.setSignerUserID(false, userId);
             signatureGenerator.setHashedSubpackets(spGen.generate());
         }
@@ -1264,7 +1267,7 @@ public class Apg {
             signatureGenerator.initSign(type, signaturePrivateKey);
 
             PGPSignatureSubpacketGenerator spGen = new PGPSignatureSubpacketGenerator();
-            String userId = getMainUserId(getMasterKey(signingKeyRing));
+            String userId = signingKeyRing.getMasterKey().getMainUserId();
             spGen.setSignerUserID(false, userId);
             signatureGenerator.setHashedSubpackets(spGen.generate());
         }
@@ -1519,7 +1522,7 @@ public class Apg {
                     String userId = null;
                     PGPPublicKeyRing sigKeyRing = getPublicKeyRing(signatureKeyId);
                     if (sigKeyRing != null) {
-                        userId = getMainUserId(getMasterKey(sigKeyRing));
+                        userId = sigKeyRing.getMasterKey().getMainUserId();
                     }
                     returnData.putString(EXTRA_SIGNATURE_USER_ID, userId);
                     break;
@@ -1676,7 +1679,7 @@ public class Apg {
                 String userId = null;
                 PGPPublicKeyRing sigKeyRing = getPublicKeyRing(signatureKeyId);
                 if (sigKeyRing != null) {
-                    userId = getMainUserId(getMasterKey(sigKeyRing));
+                    userId = sigKeyRing.getMasterKey().getMainUserId();
                 }
                 returnData.putString(EXTRA_SIGNATURE_USER_ID, userId);
                 break;

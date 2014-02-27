@@ -119,6 +119,10 @@ public class Key {
         return publicKey.isMasterKey();
     }
 
+    public long getKeyId() {
+       return publicKey.getKeyID();
+    }
+
     public Date getCreationDate() {
         return publicKey.getCreationTime();
     }
@@ -148,8 +152,16 @@ public class Key {
         return true;
     }
 
+    public boolean isRevoked() {
+        return publicKey.isRevoked();
+    }
+
+    public IterableIterator<String> getUserIds() {
+        return publicKey.getUserIDs();
+    }
+
     public String getMainUserId() {
-        for (String userId : new IterableIterator<String>(publicKey.getUserIDs())) {
+        for (String userId : getUserIDs()) {
             return userId;
         }
         return null;
@@ -225,9 +237,17 @@ public class Key {
         return false;
     }
 
+    public int getAlgorithm() {
+        return publicKey.getAlgorithm();
+    }
+
+    public int getBitStrength() {
+        return publicKey.getBitStrength();
+    }
+
     public String getAlgorithmInfo() {
-        int algorithm = publicKey.getAlgorithm();
-        int keySize = publicKey.getBitStrength());
+        int algorithm = getAlgorithm();
+        int keySize = getBitStrength();
         String algorithmStr = null;
 
         switch (algorithm) {
@@ -276,4 +296,11 @@ public class Key {
         return fingerprint;
     }
 
+    public byte[] getEncoded() {
+        if (isPublic()) {
+            return publicKey.getEncoded();
+        } else {
+            return secretKey.getEncoded();
+        }
+    }
 }
