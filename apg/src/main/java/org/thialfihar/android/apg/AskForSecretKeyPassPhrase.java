@@ -85,12 +85,6 @@ public class AskForSecretKeyPassPhrase {
                             try {
                                 PGPPrivateKey testKey = secretKey.extractPrivateKey(passPhrase.toCharArray(),
                                                                                     new BouncyCastleProvider());
-                                if (testKey == null) {
-                                    Toast.makeText(activity,
-                                                   R.string.error_couldNotExtractPrivateKey,
-                                                   Toast.LENGTH_SHORT).show();
-                                    return;
-                                }
                             } catch (PGPException e) {
                                 Toast.makeText(activity,
                                                R.string.wrongPassPhrase,
