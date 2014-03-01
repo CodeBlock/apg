@@ -640,7 +640,6 @@ public class Apg {
                             try {
                                 PGPPrivateKey testKey = secretKeyRing.getSecretKey()
                                         .extractPrivateKey(new char[] {}, new BouncyCastleProvider());
-                                }
                             } catch (PGPException e) {
                                 // all good if this fails, we likely didn't use the right password
                             }
